@@ -1,6 +1,6 @@
 name: founder-radar
 
-on:
+"on":
   schedule:
     - cron: "0 15 * * *"   # daily ~8am Pacific (15:00 UTC)
   workflow_dispatch: {}      # lets you run it manually from the Actions tab
