@@ -1,0 +1,49 @@
+name: founder-radar
+
+on:
+  schedule:
+    - cron: "0 15 * * *"   # daily ~8am Pacific (15:00 UTC)
+  workflow_dispatch: {}      # lets you run it manually from the Actions tab
+
+permissions:
+  contents: write            # so it can commit seen.json back
+
+concurrency:
+  group: founder-radar
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Run radar
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL:   ${{ vars.GEMINI_MODEL }}
+          NTFY_TOPIC:     ${{ secrets.NTFY_TOPIC }}
+          # optional email digest (leave unset to skip):
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_TO:  ${{ secrets.EMAIL_TO }}
+        run: python radar.py
+
+      - name: Commit updated state
+        run: |
+          git config user.name  "founder-radar-bot"
+          git config user.email "actions@github.com"
+          git add seen.json
+          git diff --staged --quiet || git commit -m "update seen events [skip ci]"
+          git push
