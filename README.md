@@ -1,10 +1,19 @@
 # founder-radar
 
-Daily scan of [Cerebral Valley events](https://cerebralvalley.ai/events) for
-**high-caliber founder / VC / hiring events**. A free AI (Google Gemini) reads
+Daily **multi-source** scan for **high-caliber founder / VC / hiring events**
+across SF & the Bay, over the next ~2 weeks. A free AI (Google Gemini) reads
 each new event and keeps only the relevant ones, then pushes them to your
 **phone via ntfy** (and, optionally, an email digest). Only *new* events ever
-notify — no repeats.
+notify — no repeats, de-duplicated across sources.
+
+**Sources (via a few generic adapters):**
+- Cerebral Valley (headless render)
+- Luma — discovery pages (`/sf`, `/ai-sf`) + calendars by ID (accelerators/communities)
+- Any schema.org JSON-LD site — Hidden Events, Startup Valley (add more in `JSONLD_SITES`)
+- Any iCal feed — Meetup groups, etc. (add more in `ICAL_FEEDS`)
+- Devpost hackathons
+
+Add a source by dropping a URL/ID into the relevant list at the top of `radar.py`.
 
 Runs on **GitHub Actions** (free), so it works even when your computer is off.
 Fork it and anyone can run their own.
