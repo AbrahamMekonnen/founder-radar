@@ -381,9 +381,12 @@ def notify_ntfy(kept):
                      "“": '"', "”": '"', "→": "->", "·": "-"}.items():
             s = s.replace(k, v)
         return s.encode("ascii", "ignore").decode()
-    lines = [ascii_safe(f'- {e["title"]} | {e["when"]} '
-                        f'[{e.get("caliber","?")}/{e.get("category","?")}] ({e["source"]})')
-             for e in kept]
+    def line(e):
+        head = (f'- {e["title"]} | {e["when"]} '
+                f'[{e.get("caliber","?")}/{e.get("category","?")}]')
+        url = e.get("url") or ""
+        return ascii_safe(head + ("\\n  " + url if url else ""))
+    lines = [line(e) for e in kept]
     # multi-line goes in the Message HEADER (\n-escaped) — a multi-line body
     # makes ntfy attach it as a file instead of showing a message.
     msg = "\\n".join(lines)[:3800]
