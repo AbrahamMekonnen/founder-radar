@@ -376,13 +376,22 @@ def notify_ntfy(kept):
     if not topic:
         print("[info] NTFY_TOPIC unset; skipping push", file=sys.stderr)
         return
-    lines = [f'• {e["title"]} — {e["when"]} [{e.get("caliber","?")}/{e.get("category","?")}] ({e["source"]})'
+    def ascii_safe(s):
+        for k, v in {"•": "-", "—": "-", "–": "-", "’": "'", "‘": "'",
+                     "“": '"', "”": '"', "→": "->", "·": "-"}.items():
+            s = s.replace(k, v)
+        return s.encode("ascii", "ignore").decode()
+    lines = [ascii_safe(f'- {e["title"]} | {e["when"]} '
+                        f'[{e.get("caliber","?")}/{e.get("category","?")}] ({e["source"]})')
              for e in kept]
-    body = "\n".join(lines)[:3800]
+    # multi-line goes in the Message HEADER (\n-escaped) — a multi-line body
+    # makes ntfy attach it as a file instead of showing a message.
+    msg = "\\n".join(lines)[:3800]
     req = urllib.request.Request(
-        f"https://ntfy.sh/{topic}", data=body.encode("utf-8"),
+        f"https://ntfy.sh/{topic}", data=b"", method="POST",
         headers={"Title": f"{len(kept)} new founder/VC/hiring events",
-                 "Tags": "rocket", "Click": "https://cerebralvalley.ai/events"})
+                 "Tags": "rocket", "Click": "https://cerebralvalley.ai/events",
+                 "Message": msg})
     try:
         urllib.request.urlopen(req, timeout=30)
         print(f"[ok] pushed {len(kept)} to ntfy")
