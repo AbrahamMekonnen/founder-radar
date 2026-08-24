@@ -70,9 +70,19 @@ def http_get(url, timeout=30):
 
 
 # ---------------- date parsing ------------------------------------------------
+try:
+    from zoneinfo import ZoneInfo
+    _PT = ZoneInfo("America/Los_Angeles")
+except Exception:
+    _PT = None
+
+
 def parse_iso(s):
     try:
-        return dt.datetime.fromisoformat(str(s).replace("Z", "+00:00")).date()
+        d = dt.datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        if d.tzinfo and _PT:          # convert UTC/offset times to Pacific so the
+            d = d.astimezone(_PT)     # date matches local sources (fixes cross-source dedup)
+        return d.date()
     except Exception:
         return None
 
