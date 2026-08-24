@@ -23,7 +23,8 @@ from pathlib import Path
 # ---------------- config ------------------------------------------------------
 SEEN_FILE     = Path(__file__).parent / "seen.json"
 GEMINI_MODEL  = os.environ.get("GEMINI_MODEL") or "gemini-3.6-flash"
-HORIZON_DAYS  = int(os.environ.get("HORIZON_DAYS", "16"))
+LEAD_DAYS     = int(os.environ.get("LEAD_DAYS") or "5")    # skip events sooner than this (need travel/planning lead time)
+HORIZON_DAYS  = int(os.environ.get("HORIZON_DAYS") or "18")  # far edge of the window
 DRY_RUN       = os.environ.get("DRY_RUN", "").lower() in ("1", "true", "yes")
 UA            = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36")
@@ -311,9 +312,9 @@ def event_id(e):
 
 def within_horizon(e):
     if not e["start"]:
-        return False  # need a date to place it in the next ~2 weeks
+        return False  # need a date to place it in the window
     today = dt.date.today()
-    return today - dt.timedelta(days=1) <= e["start"] <= today + dt.timedelta(days=HORIZON_DAYS)
+    return (today + dt.timedelta(days=LEAD_DAYS)) <= e["start"] <= (today + dt.timedelta(days=HORIZON_DAYS))
 
 
 # ---------------- classify (free AI: Gemini) ---------------------------------
@@ -434,7 +435,8 @@ def main():
     for e in raw:
         if within_horizon(e):
             by_id[event_id(e)] = e
-    print(f"[info] {len(raw)} scraped -> {len(by_id)} unique within {HORIZON_DAYS}d")
+    print(f"[info] {len(raw)} scraped -> {len(by_id)} unique in window "
+          f"[+{LEAD_DAYS}d .. +{HORIZON_DAYS}d]")
 
     new = {eid: e for eid, e in by_id.items() if eid not in seen}
     print(f"[info] {len(new)} new since last run")
