@@ -3,4 +3,5 @@ __pycache__/
 *.log
 .venv/
 parsed_sample.json
+docs/board_inner.html
 .env

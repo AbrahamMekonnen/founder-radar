@@ -1,0 +1,83 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Founder Radar</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono&display=swap"></head><body><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono&display=swap"><style>
+:root{--bg:#f6f7f9;--surface:#fff;--ink:#151a21;--muted:#616b7a;--border:#e4e7ec;
+--accent:#2f6bff;--soft:#2f6bff14;--founder:#7c5cff;--vc:#12a150;--hiring:#dd8409;
+--conference:#2f6bff;--other:#8a94a6;--shadow:0 1px 2px rgba(20,24,33,.05),0 6px 20px rgba(20,24,33,.05);}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1015;--surface:#151a21;
+--ink:#e7ebf1;--muted:#98a2b2;--border:#232b36;--accent:#6b93ff;--soft:#6b93ff1f;--founder:#9d86ff;
+--vc:#39c07a;--hiring:#f0a63a;--conference:#6b93ff;--other:#98a2b2;--shadow:none;}}
+:root[data-theme="dark"]{--bg:#0d1015;--surface:#151a21;--ink:#e7ebf1;--muted:#98a2b2;--border:#232b36;
+--accent:#6b93ff;--soft:#6b93ff1f;--founder:#9d86ff;--vc:#39c07a;--hiring:#f0a63a;--conference:#6b93ff;
+--other:#98a2b2;--shadow:none;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+font-family:"Hanken Grotesk",system-ui,-apple-system,sans-serif;line-height:1.45;
+-webkit-font-smoothing:antialiased;}
+.wrap{max-width:720px;margin:0 auto;padding:0 18px 64px;}
+header{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);
+backdrop-filter:blur(10px);border-bottom:1px solid var(--border);padding:18px 0 12px;margin-bottom:8px;}
+.title{font-family:"Bricolage Grotesque","Hanken Grotesk",sans-serif;font-weight:700;
+font-size:1.5rem;letter-spacing:-.02em;margin:0;display:flex;align-items:center;gap:.5rem;}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--accent);
+box-shadow:0 0 0 4px var(--soft);}
+.sub{color:var(--muted);font-size:.82rem;margin:.25rem 0 .9rem;}
+.filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.chip{font:inherit;font-size:.78rem;font-weight:600;padding:5px 11px;border-radius:999px;
+border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;
+transition:.15s;}
+.chip:hover{border-color:var(--accent);color:var(--ink);}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;}
+.chip.major[aria-pressed="true"]{background:var(--hiring);border-color:var(--hiring);}
+.spacer{flex:1}
+.themebtn{margin-left:auto;background:none;border:1px solid var(--border);border-radius:8px;
+color:var(--muted);cursor:pointer;padding:5px 9px;font-size:.9rem;}
+details{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+margin:10px 0;box-shadow:var(--shadow);overflow:hidden;}
+summary{list-style:none;cursor:pointer;padding:13px 16px;display:flex;align-items:baseline;
+gap:.6rem;font-weight:600;}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"›";margin-left:auto;color:var(--muted);font-size:1.2rem;
+transform:rotate(90deg);transition:transform .2s;}
+details[open] summary::after{transform:rotate(-90deg);}
+.daycount{color:var(--muted);font-weight:500;font-size:.8rem;}
+.ev{display:flex;gap:.8rem;padding:11px 16px;border-top:1px solid var(--border);align-items:baseline;}
+.ev:first-of-type{border-top:1px solid var(--border);}
+.time{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.74rem;color:var(--muted);
+white-space:nowrap;min-width:64px;font-variant-numeric:tabular-nums;padding-top:1px;}
+.body{flex:1;min-width:0;}
+.evt{color:var(--ink);text-decoration:none;font-weight:600;font-size:.94rem;}
+.evt:hover{color:var(--accent);text-decoration:underline;}
+.meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px;align-items:center;}
+.tag{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;
+padding:2px 7px;border-radius:5px;color:#fff;}
+.src{font-size:.72rem;color:var(--muted);}
+.new{font-size:.66rem;font-weight:800;color:var(--accent);border:1px solid var(--accent);
+padding:1px 5px;border-radius:5px;text-transform:uppercase;}
+.star{color:var(--hiring);}
+.empty{color:var(--muted);text-align:center;padding:40px 0;}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style><div class="wrap"><header><h1 class="title"><span class="dot"></span>Founder Radar<button id="theme" class="themebtn" title="Toggle theme">◐</button></h1><p class="sub">SF founder · VC · hiring events, 5–18 days out · updated 2026-08-23</p><div class="filters"><button class="chip" data-cat="all" aria-pressed="true">All</button><button class="chip" data-cat="founder">Founders</button><button class="chip" data-cat="vc">VCs</button><button class="chip" data-cat="hiring">Hiring</button><button class="chip" data-cat="conference">Conferences</button><button class="chip major" id="majorToggle" aria-pressed="false">★ Major only</button></div></header><main><details open><summary>Wed, Sep 2<span class="daycount">2 events</span></summary><div class="ev" data-cat="vc" data-caliber="minor"><span class="time">10:00AM</span><div class="body"><a class="evt" href="https://cerebralvalley.ai/events" target="_blank" rel="noopener">Coffee Club Early Stage B2B Non-Technical Founders</a> <span class="new">new</span><div class="meta"><span class="tag" style="background:var(--vc)">VC</span><span class="src">San Francisco, CA</span></div></div></div><div class="ev" data-cat="founder" data-caliber="minor"><span class="time">5:00PM</span><div class="body"><a class="evt" href="https://cerebralvalley.ai/events" target="_blank" rel="noopener">Frontier Signals #02: What Will AI Learn Next?</a> <span class="new">new</span><div class="meta"><span class="tag" style="background:var(--founder)">founder</span><span class="src">AWS Builder Loft</span></div></div></div></details><details open><summary>Thu, Sep 3<span class="daycount">3 events</span></summary><div class="ev" data-cat="conference" data-caliber="major"><span class="time">12:30AM</span><div class="body"><a class="evt" href="https://cerebralvalley.ai/events" target="_blank" rel="noopener">The London AI Startup Conference 2026</a><div class="meta"><span class="tag" style="background:var(--conference)">conf</span> <span class="star" title="major">★</span><span class="src">Google London - Central Saint Giles</span></div></div></div><div class="ev" data-cat="founder" data-caliber="major"><span class="time">5:30PM</span><div class="body"><a class="evt" href="https://cerebralvalley.ai/events" target="_blank" rel="noopener">SF DEMO NIGHT (w/ The AI Collective)</a> <span class="new">new</span><div class="meta"><span class="tag" style="background:var(--founder)">founder</span> <span class="star" title="major">★</span><span class="src">AWS Builder Loft</span></div></div></div><div class="ev" data-cat="founder" data-caliber="minor"><span class="time">7:00PM</span><div class="body"><a class="evt" href="https://cerebralvalley.ai/events" target="_blank" rel="noopener">Abaka AI VIP Dinner</a> <span class="new">new</span><div class="meta"><span class="tag" style="background:var(--founder)">founder</span><span class="src">Mountain View, CA</span></div></div></div></details><details><summary>Tue, Sep 8<span class="daycount">2 events</span></summary><div class="ev" data-cat="vc" data-caliber="major"><span class="time">11:00AM</span><div class="body"><a class="evt" href="https://cerebralvalley.ai/events" target="_blank" rel="noopener">Level Five VC Deep Tech Deployment Summit</a> <span class="new">new</span><div class="meta"><span class="tag" style="background:var(--vc)">VC</span> <span class="star" title="major">★</span><span class="src">San Francisco, CA</span></div></div></div><div class="ev" data-cat="founder" data-caliber="minor"><span class="time">5:00PM</span><div class="body"><a class="evt" href="https://cerebralvalley.ai/events" target="_blank" rel="noopener">Agent Experience Demo Night by Sapient @ AWS Builder Loft (#6th Edition)</a> <span class="new">new</span><div class="meta"><span class="tag" style="background:var(--founder)">founder</span><span class="src">AWS Builder Loft</span></div></div></div></details><details><summary>Wed, Sep 9<span class="daycount">1 events</span></summary><div class="ev" data-cat="founder" data-caliber="minor"><span class="time">—</span><div class="body"><a class="evt" href="https://luma.com/ndlb2tea" target="_blank" rel="noopener">“AI Agents &amp; The Future of AI” VC Insights• Founder Pitches</a> <span class="new">new</span><div class="meta"><span class="tag" style="background:var(--founder)">founder</span><span class="src">Palo Alto, CA</span></div></div></div></details><details><summary>Thu, Sep 10<span class="daycount">4 events</span></summary><div class="ev" data-cat="hiring" data-caliber="major"><span class="time">2:00PM</span><div class="body"><a class="evt" href="https://cerebralvalley.ai/events" target="_blank" rel="noopener">Deep Tech Startup Crawl</a> <span class="new">new</span><div class="meta"><span class="tag" style="background:var(--hiring)">hiring</span> <span class="star" title="major">★</span><span class="src">San Francisco, CA</span></div></div></div><div class="ev" data-cat="vc" data-caliber="major"><span class="time">5:00PM</span><div class="body"><a class="evt" href="https://cerebralvalley.ai/events" target="_blank" rel="noopener">Llama Lounge 26: The AI Startup Event Series</a> <span class="new">new</span><div class="meta"><span class="tag" style="background:var(--vc)">VC</span> <span class="star" title="major">★</span><span class="src">Microsoft</span></div></div></div><div class="ev" data-cat="vc" data-caliber="minor"><span class="time">6:00PM</span><div class="body"><a class="evt" href="https://cerebralvalley.ai/events" target="_blank" rel="noopener">Founder/VC Dinner Happy Hour</a> <span class="new">new</span><div class="meta"><span class="tag" style="background:var(--vc)">VC</span><span class="src">ERIA Marina</span></div></div></div><div class="ev" data-cat="founder" data-caliber="minor"><span class="time">6:00PM</span><div class="body"><a class="evt" href="https://cerebralvalley.ai/events" target="_blank" rel="noopener">No Limit: Executive Poker Tournament</a> <span class="new">new</span><div class="meta"><span class="tag" style="background:var(--founder)">founder</span><span class="src">Unify</span></div></div></div></details></main></div><script>
+(function(){
+ var root=document.documentElement;
+ var saved=localStorage.getItem('fr-theme'); if(saved)root.setAttribute('data-theme',saved);
+ document.getElementById('theme').onclick=function(){
+   var d=(root.getAttribute('data-theme')==='dark')?'light':'dark';
+   root.setAttribute('data-theme',d);localStorage.setItem('fr-theme',d);};
+ var cat='all',major=false;
+ function apply(){
+   document.querySelectorAll('.ev').forEach(function(e){
+     var ok=(cat==='all'||e.dataset.cat===cat)&&(!major||e.dataset.caliber==='major');
+     e.style.display=ok?'':'none';});
+   document.querySelectorAll('details').forEach(function(d){
+     var vis=d.querySelectorAll('.ev:not([style*="none"])').length;
+     d.style.display=vis?'':'none';
+     var c=d.querySelector('.daycount'); if(c)c.textContent=vis+(vis===1?' event':' events');});
+ }
+ document.querySelectorAll('.chip[data-cat]').forEach(function(b){
+   b.onclick=function(){cat=b.dataset.cat;
+     document.querySelectorAll('.chip[data-cat]').forEach(function(x){x.setAttribute('aria-pressed',x===b);});
+     apply();};});
+ var mj=document.getElementById('majorToggle');
+ mj.onclick=function(){major=!major;mj.setAttribute('aria-pressed',major);apply();};
+})();
+</script></body></html>

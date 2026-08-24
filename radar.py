@@ -434,42 +434,206 @@ def notify_email(kept):
         print(f"[warn] email failed: {ex}", file=sys.stderr)
 
 
+# ---------------- board (collapsible, filterable HTML page) ------------------
+CAT = {"founder": "founder", "vc": "VC", "hiring": "hiring",
+       "conference": "conf", "other": "other", "keyword": "match"}
+
+FONT_LINKS = ('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?'
+              'family=Bricolage+Grotesque:wght@600;700&family=Hanken+Grotesk:wght@400;500;600&'
+              'family=JetBrains+Mono&display=swap">')
+
+BOARD_CSS = """<style>
+:root{--bg:#f6f7f9;--surface:#fff;--ink:#151a21;--muted:#616b7a;--border:#e4e7ec;
+--accent:#2f6bff;--soft:#2f6bff14;--founder:#7c5cff;--vc:#12a150;--hiring:#dd8409;
+--conference:#2f6bff;--other:#8a94a6;--shadow:0 1px 2px rgba(20,24,33,.05),0 6px 20px rgba(20,24,33,.05);}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1015;--surface:#151a21;
+--ink:#e7ebf1;--muted:#98a2b2;--border:#232b36;--accent:#6b93ff;--soft:#6b93ff1f;--founder:#9d86ff;
+--vc:#39c07a;--hiring:#f0a63a;--conference:#6b93ff;--other:#98a2b2;--shadow:none;}}
+:root[data-theme="dark"]{--bg:#0d1015;--surface:#151a21;--ink:#e7ebf1;--muted:#98a2b2;--border:#232b36;
+--accent:#6b93ff;--soft:#6b93ff1f;--founder:#9d86ff;--vc:#39c07a;--hiring:#f0a63a;--conference:#6b93ff;
+--other:#98a2b2;--shadow:none;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+font-family:"Hanken Grotesk",system-ui,-apple-system,sans-serif;line-height:1.45;
+-webkit-font-smoothing:antialiased;}
+.wrap{max-width:720px;margin:0 auto;padding:0 18px 64px;}
+header{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);
+backdrop-filter:blur(10px);border-bottom:1px solid var(--border);padding:18px 0 12px;margin-bottom:8px;}
+.title{font-family:"Bricolage Grotesque","Hanken Grotesk",sans-serif;font-weight:700;
+font-size:1.5rem;letter-spacing:-.02em;margin:0;display:flex;align-items:center;gap:.5rem;}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--accent);
+box-shadow:0 0 0 4px var(--soft);}
+.sub{color:var(--muted);font-size:.82rem;margin:.25rem 0 .9rem;}
+.filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.chip{font:inherit;font-size:.78rem;font-weight:600;padding:5px 11px;border-radius:999px;
+border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;
+transition:.15s;}
+.chip:hover{border-color:var(--accent);color:var(--ink);}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;}
+.chip.major[aria-pressed="true"]{background:var(--hiring);border-color:var(--hiring);}
+.spacer{flex:1}
+.themebtn{margin-left:auto;background:none;border:1px solid var(--border);border-radius:8px;
+color:var(--muted);cursor:pointer;padding:5px 9px;font-size:.9rem;}
+details{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+margin:10px 0;box-shadow:var(--shadow);overflow:hidden;}
+summary{list-style:none;cursor:pointer;padding:13px 16px;display:flex;align-items:baseline;
+gap:.6rem;font-weight:600;}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"›";margin-left:auto;color:var(--muted);font-size:1.2rem;
+transform:rotate(90deg);transition:transform .2s;}
+details[open] summary::after{transform:rotate(-90deg);}
+.daycount{color:var(--muted);font-weight:500;font-size:.8rem;}
+.ev{display:flex;gap:.8rem;padding:11px 16px;border-top:1px solid var(--border);align-items:baseline;}
+.ev:first-of-type{border-top:1px solid var(--border);}
+.time{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.74rem;color:var(--muted);
+white-space:nowrap;min-width:64px;font-variant-numeric:tabular-nums;padding-top:1px;}
+.body{flex:1;min-width:0;}
+.evt{color:var(--ink);text-decoration:none;font-weight:600;font-size:.94rem;}
+.evt:hover{color:var(--accent);text-decoration:underline;}
+.meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px;align-items:center;}
+.tag{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;
+padding:2px 7px;border-radius:5px;color:#fff;}
+.src{font-size:.72rem;color:var(--muted);}
+.new{font-size:.66rem;font-weight:800;color:var(--accent);border:1px solid var(--accent);
+padding:1px 5px;border-radius:5px;text-transform:uppercase;}
+.star{color:var(--hiring);}
+.empty{color:var(--muted);text-align:center;padding:40px 0;}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>"""
+
+BOARD_JS = """<script>
+(function(){
+ var root=document.documentElement;
+ var saved=localStorage.getItem('fr-theme'); if(saved)root.setAttribute('data-theme',saved);
+ document.getElementById('theme').onclick=function(){
+   var d=(root.getAttribute('data-theme')==='dark')?'light':'dark';
+   root.setAttribute('data-theme',d);localStorage.setItem('fr-theme',d);};
+ var cat='all',major=false;
+ function apply(){
+   document.querySelectorAll('.ev').forEach(function(e){
+     var ok=(cat==='all'||e.dataset.cat===cat)&&(!major||e.dataset.caliber==='major');
+     e.style.display=ok?'':'none';});
+   document.querySelectorAll('details').forEach(function(d){
+     var vis=d.querySelectorAll('.ev:not([style*="none"])').length;
+     d.style.display=vis?'':'none';
+     var c=d.querySelector('.daycount'); if(c)c.textContent=vis+(vis===1?' event':' events');});
+ }
+ document.querySelectorAll('.chip[data-cat]').forEach(function(b){
+   b.onclick=function(){cat=b.dataset.cat;
+     document.querySelectorAll('.chip[data-cat]').forEach(function(x){x.setAttribute('aria-pressed',x===b);});
+     apply();};});
+ var mj=document.getElementById('majorToggle');
+ mj.onclick=function(){major=!major;mj.setAttribute('aria-pressed',major);apply();};
+})();
+</script>"""
+
+
+def _esc(s):
+    return ((s or "").replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace('"', "&quot;"))
+
+
+def build_board_inner(events, generated, new_ids=None):
+    new_ids = new_ids or set()
+    evs = sorted(events, key=lambda e: (e["start"] or dt.date.max, e.get("when", "")))
+    groups = {}
+    for e in evs:
+        groups.setdefault(e["start"], []).append(e)
+    sections = []
+    for i, (d, items) in enumerate(groups.items()):
+        label = (d.strftime("%a, %b ") + str(d.day)) if d else "Undated"
+        rows = []
+        for e in items:
+            cat = e.get("category", "other")
+            cat = cat if cat in CAT else "other"
+            tm = re.search(r"(\d{1,2}:\d{2}\s*[APap][Mm])", e.get("when", ""))
+            time = tm.group(1).upper().replace(" ", "") if tm else "—"
+            star = ' <span class="star" title="major">★</span>' if e.get("caliber") == "major" else ""
+            newb = ' <span class="new">new</span>' if event_id(e) in new_ids else ""
+            url = _esc(e.get("url") or "#")
+            rows.append(
+                f'<div class="ev" data-cat="{cat}" data-caliber="{_esc(e.get("caliber","minor"))}">'
+                f'<span class="time">{_esc(time)}</span><div class="body">'
+                f'<a class="evt" href="{url}" target="_blank" rel="noopener">{_esc(e["title"])}</a>{newb}'
+                f'<div class="meta"><span class="tag" style="background:var(--{cat})">{CAT[cat]}</span>'
+                f'{star}<span class="src">{_esc(e.get("location") or e["source"])}</span></div></div></div>')
+        openattr = " open" if i < 2 else ""
+        sections.append(
+            f'<details{openattr}><summary>{_esc(label)}'
+            f'<span class="daycount">{len(items)} events</span></summary>{"".join(rows)}</details>')
+    body = "".join(sections) or '<p class="empty">No founder/VC/hiring events in the window right now.</p>'
+    return (FONT_LINKS + BOARD_CSS +
+            '<div class="wrap"><header>'
+            '<h1 class="title"><span class="dot"></span>Founder Radar'
+            '<button id="theme" class="themebtn" title="Toggle theme">◐</button></h1>'
+            f'<p class="sub">SF founder · VC · hiring events, {LEAD_DAYS}–{HORIZON_DAYS} days out · '
+            f'updated {generated}</p>'
+            '<div class="filters">'
+            '<button class="chip" data-cat="all" aria-pressed="true">All</button>'
+            '<button class="chip" data-cat="founder">Founders</button>'
+            '<button class="chip" data-cat="vc">VCs</button>'
+            '<button class="chip" data-cat="hiring">Hiring</button>'
+            '<button class="chip" data-cat="conference">Conferences</button>'
+            '<button class="chip major" id="majorToggle" aria-pressed="false">★ Major only</button>'
+            '</div></header>'
+            f'<main>{body}</main></div>' + BOARD_JS)
+
+
+def write_board(events, new_ids=None):
+    gen = dt.datetime.now().strftime("%b %d, %I:%M %p") if False else dt.date.today().isoformat()
+    inner = build_board_inner(events, gen, new_ids)
+    doc = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+           '<meta name="viewport" content="width=device-width,initial-scale=1">'
+           '<title>Founder Radar</title>'
+           '<link rel="preconnect" href="https://fonts.googleapis.com">'
+           '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+           '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?'
+           'family=Bricolage+Grotesque:wght@600;700&family=Hanken+Grotesk:wght@400;500;600&'
+           'family=JetBrains+Mono&display=swap">'
+           '</head><body>' + inner + '</body></html>')
+    out = Path(__file__).parent / "docs"
+    out.mkdir(exist_ok=True)
+    (out / "index.html").write_text(doc, encoding="utf-8")
+    (out / "board_inner.html").write_text(inner, encoding="utf-8")  # for Artifact preview
+    print(f"[ok] wrote board ({len(events)} events)")
+
+
 # ---------------- main --------------------------------------------------------
 def main():
     seen = set(json.loads(SEEN_FILE.read_text(encoding="utf-8"))) if SEEN_FILE.exists() else set()
     first_run = not seen
 
     raw = gather_all()
-    # horizon + dedup by cross-source id
-    horizon, by_id = [], {}
+    by_id = {}
     for e in raw:
         if within_horizon(e):
             by_id[event_id(e)] = e
-    print(f"[info] {len(raw)} scraped -> {len(by_id)} unique in window "
+    print(f"[info] {len(raw)} scraped -> {len(by_id)} in window "
           f"[+{LEAD_DAYS}d .. +{HORIZON_DAYS}d]")
 
-    new = {eid: e for eid, e in by_id.items() if eid not in seen}
-    print(f"[info] {len(new)} new since last run")
+    new_ids = {eid for eid in by_id if eid not in seen}
+    print(f"[info] {len(new_ids)} new since last run")
 
-    if DRY_RUN:  # always classify + print, never write state
-        sample = list(new.values()) or list(by_id.values())
-        kept = classify(sample[:80])
-        print(f"[dry-run] {len(kept)} would notify:")
-        for e in kept:
-            print(f"  KEEP [{e.get('caliber')}/{e.get('category')}] {e['title']} — {e['when']} ({e['source']})")
+    # classify ALL in-window events (for the board); keep the relevant ones
+    kept = classify(list(by_id.values()))
+    print(f"[info] {len(kept)} relevant (founder/VC/hiring)")
+    write_board(kept, new_ids)                       # always refresh the board
+
+    new_kept = [e for e in kept if event_id(e) in new_ids]
+
+    if DRY_RUN:
+        print(f"[dry-run] board written; {len(new_kept)} would push")
         return
 
     if first_run:
         SEEN_FILE.write_text(json.dumps(sorted(by_id.keys()), indent=0), encoding="utf-8")
-        print("[info] first run — seeded baseline, no notifications")
+        print("[info] first run — seeded baseline + board, no push")
         return
 
-    if new:
-        kept = classify(list(new.values()))
-        print(f"[info] {len(kept)} passed the founder/VC/hiring filter")
-        if kept:
-            notify_ntfy(kept)
-            notify_email(kept)
+    if new_kept:
+        notify_ntfy(new_kept)
+        notify_email(new_kept)
 
     seen.update(by_id.keys())
     SEEN_FILE.write_text(json.dumps(sorted(seen), indent=0), encoding="utf-8")
