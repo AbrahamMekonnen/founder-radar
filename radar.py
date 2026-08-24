@@ -29,6 +29,7 @@ DRY_RUN       = os.environ.get("DRY_RUN", "").lower() in ("1", "true", "yes")
 UA            = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36")
 MAX_BLURB     = 400
+BOARD_URL     = os.environ.get("BOARD_URL") or "https://abrahammekonnen.github.io/founder-radar/"
 
 # Sources (add/remove freely — each maps to a generic adapter below)
 LUMA_DISCOVERY = ["https://luma.com/ai-sf", "https://luma.com/sf"]
@@ -404,7 +405,7 @@ def notify_ntfy(kept):
     req = urllib.request.Request(
         f"https://ntfy.sh/{topic}", data=b"", method="POST",
         headers={"Title": f"{len(kept)} new founder/VC/hiring events",
-                 "Tags": "rocket", "Click": "https://cerebralvalley.ai/events",
+                 "Tags": "rocket", "Click": BOARD_URL,
                  "Message": msg})
     try:
         urllib.request.urlopen(req, timeout=30)
