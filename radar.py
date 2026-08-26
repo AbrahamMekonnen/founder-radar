@@ -54,9 +54,12 @@ KEEP an event only if it is clearly one of:
 DROP: pure hackathons unless investor-facing, generic coding workshops, trainings,
   product webinars, wellness/social-only meetups, and anything not about
   founders/VCs/hiring.
-For each event return: keep (true/false), category (one of
-"founder","vc","hiring","conference","other"), caliber ("major"|"minor"),
-reason (max 12 words).
+For each event return: keep (true/false), categories (a LIST of ALL that
+apply, from "founder","vc","hiring","conference","other" -- e.g. a founders
++ recruiters dinner is ["founder","hiring"]), caliber ("major"|"minor"),
+reason (max 12 words), and summary: one concise sentence (max 20 words)
+saying what the event actually IS and who attends, so the reader knows
+without opening the link. Plain, factual, no marketing fluff.
 """.strip()
 
 MONTHS = {m: i for i, m in enumerate(
@@ -366,6 +369,24 @@ def within_horizon(e):
 
 
 # ---------------- classify (free AI: Gemini) ---------------------------------
+VALID_CATS = ("founder", "vc", "hiring", "conference", "other")
+
+
+def norm_cats(v):
+    """Accept a list, a single string, or legacy 'category'; return a clean
+    de-duped list of valid category tags (never empty)."""
+    if isinstance(v, str):
+        v = [v]
+    elif not isinstance(v, list):
+        v = []
+    out = []
+    for c in v:
+        c = str(c).strip().lower()
+        if c in VALID_CATS and c not in out:
+            out.append(c)
+    return out or ["other"]
+
+
 def classify(events):
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not key:
@@ -376,7 +397,7 @@ def classify(events):
         for i, e in enumerate(events))
     prompt = (FILTER_INSTRUCTIONS +
               "\n\nReturn ONLY a JSON array, one object per event, same order, each: "
-              '{"index":int,"keep":bool,"category":str,"caliber":str,"reason":str}.'
+              '{"index":int,"keep":bool,"categories":[str],"caliber":str,"reason":str,"summary":str}.'
               "\n\nEVENTS:\n" + numbered)
     url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
            f"{GEMINI_MODEL}:generateContent?key={key}")
@@ -397,14 +418,21 @@ def classify(events):
     for i, e in enumerate(events):
         v = by_i.get(i, {})
         if v.get("keep"):
-            out.append({**e, "category": v.get("category", "?"),
+            cats = norm_cats(v.get("categories") or v.get("category"))
+            summary = (v.get("summary") or "").strip() or (e.get("blurb") or "")[:160]
+            out.append({**e, "categories": cats, "summary": summary,
                         "caliber": v.get("caliber", "?"), "reason": v.get("reason", "")})
     return out
 
 
-KW_KEEP = ["founder", "vc", "venture", "investor", "pitch", "demo day", "demo night",
-           "hiring", "recruit", "talent", "career", "dinner", "mixer", "angel",
-           "seed", "raise", "operators", "summit"]
+# keyword -> category map (a hit adds that tag; an event can collect several)
+KW_CATS = {
+    "founder": ["founder", "founders", "operators", "pitch", "demo day",
+                "demo night", "showcase", "dinner", "mixer"],
+    "vc": ["vc", "venture", "investor", "angel", "seed", "raise", "capital"],
+    "hiring": ["hiring", "recruit", "talent", "career", "jobs", "join our team"],
+    "conference": ["summit", "conference", "expo", "forum", "keynote"],
+}
 KW_DROP = ["workshop", "training", "webinar", "bootcamp", "cold plunge", "yoga"]
 
 
@@ -414,8 +442,11 @@ def keyword_fallback(events):
         hay = f'{e["title"]} {e["blurb"]}'.lower()
         if any(k in hay for k in KW_DROP):
             continue
-        if any(k in hay for k in KW_KEEP):
-            out.append({**e, "category": "keyword", "caliber": "?", "reason": "keyword match"})
+        cats = [cat for cat, kws in KW_CATS.items() if any(k in hay for k in kws)]
+        if cats:
+            out.append({**e, "categories": cats, "caliber": "?",
+                        "reason": "keyword match",
+                        "summary": (e.get("blurb") or "")[:160]})
     return out
 
 
@@ -432,7 +463,7 @@ def notify_ntfy(kept):
         return s.encode("ascii", "ignore").decode()
     def line(e):
         head = (f'- {e["title"]} | {e["when"]} '
-                f'[{e.get("caliber","?")}/{e.get("category","?")}]')
+                f'[{e.get("caliber","?")}/{"+".join(norm_cats(e.get("categories") or e.get("category")))}]')
         url = e.get("url") or ""
         return ascii_safe(head + ("\\n  " + url if url else ""))
     lines = [line(e) for e in kept]
@@ -459,7 +490,7 @@ def notify_email(kept):
     to = [a.strip() for a in os.environ.get("EMAIL_TO", user).split(",") if a.strip()]
     rows = "\n\n".join(
         f'{e["title"]}\n{e["when"]} · {e["location"]} · {e["source"]}\n'
-        f'[{e.get("caliber","?")}/{e.get("category","?")}] {e.get("reason","")}\n'
+        f'[{e.get("caliber","?")}/{"+".join(norm_cats(e.get("categories") or e.get("category")))}] {e.get("reason","")}\n'
         f'{e["url"]}\n{e["blurb"]}' for e in kept)
     msg = MIMEText(f"{len(kept)} new founder/VC/hiring events:\n\n{rows}")
     msg["Subject"] = f"[founder-radar] {len(kept)} new events"
@@ -528,6 +559,13 @@ white-space:nowrap;min-width:64px;font-variant-numeric:tabular-nums;padding-top:
 .body{flex:1;min-width:0;}
 .evt{color:var(--ink);text-decoration:none;font-weight:600;font-size:.94rem;}
 .evt:hover{color:var(--accent);text-decoration:underline;}
+.desc{display:none;margin:6px 0 0;font-size:.8rem;line-height:1.45;color:var(--muted);
+padding:8px 10px;background:var(--soft);border-radius:8px;}
+.ev.expanded .desc{display:block;}
+.ev[data-desc="1"]{cursor:pointer;}
+.ev[data-desc="1"] .body::after{content:"tap for details";font-size:.66rem;color:var(--muted);
+opacity:.6;margin-left:6px;}
+.ev.expanded .body::after{content:"";}
 .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px;align-items:center;}
 .tag{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;
 padding:2px 7px;border-radius:5px;color:#fff;}
@@ -550,7 +588,8 @@ BOARD_JS = """<script>
  var cat='all',major=false;
  function apply(){
    document.querySelectorAll('.ev').forEach(function(e){
-     var ok=(cat==='all'||e.dataset.cat===cat)&&(!major||e.dataset.caliber==='major');
+     var tags=(e.dataset.cat||'').split(' ');
+     var ok=(cat==='all'||tags.indexOf(cat)>=0)&&(!major||e.dataset.caliber==='major');
      e.style.display=ok?'':'none';});
    document.querySelectorAll('details').forEach(function(d){
      var vis=d.querySelectorAll('.ev:not([style*="none"])').length;
@@ -563,6 +602,11 @@ BOARD_JS = """<script>
      apply();};});
  var mj=document.getElementById('majorToggle');
  mj.onclick=function(){major=!major;mj.setAttribute('aria-pressed',major);apply();};
+ // tap a card to reveal its description (ignore taps on the signup link)
+ document.querySelectorAll('.ev[data-desc="1"]').forEach(function(e){
+   e.addEventListener('click',function(ev){
+     if(ev.target.closest('a'))return;
+     e.classList.toggle('expanded');});});
 })();
 </script>"""
 
@@ -583,18 +627,24 @@ def build_board_inner(events, generated, new_ids=None):
         label = (d.strftime("%a, %b ") + str(d.day)) if d else "Undated"
         rows = []
         for e in items:
-            cat = e.get("category", "other")
-            cat = cat if cat in CAT else "other"
+            cats = norm_cats(e.get("categories") or e.get("category"))
+            cats = [c for c in cats if c in CAT] or ["other"]
             tm = re.search(r"(\d{1,2}:\d{2}\s*[APap][Mm])", e.get("when", ""))
             time = tm.group(1).upper().replace(" ", "") if tm else "—"
             star = ' <span class="star" title="major">★</span>' if e.get("caliber") == "major" else ""
             newb = ' <span class="new">new</span>' if event_id(e) in new_ids else ""
             url = _esc(e.get("url") or "#")
+            tags = "".join(f'<span class="tag" style="background:var(--{c})">{CAT[c]}</span>'
+                           for c in cats)
+            summ = (e.get("summary") or "").strip()
+            summ_html = f'<p class="desc">{_esc(summ)}</p>' if summ else ""
+            desc_attr = ' data-desc="1"' if summ else ""
             rows.append(
-                f'<div class="ev" data-cat="{cat}" data-caliber="{_esc(e.get("caliber","minor"))}">'
+                f'<div class="ev"{desc_attr} data-cat="{" ".join(cats)}" data-caliber="{_esc(e.get("caliber","minor"))}">'
                 f'<span class="time">{_esc(time)}</span><div class="body">'
                 f'<a class="evt" href="{url}" target="_blank" rel="noopener">{_esc(e["title"])}</a>{newb}'
-                f'<div class="meta"><span class="tag" style="background:var(--{cat})">{CAT[cat]}</span>'
+                f'{summ_html}'
+                f'<div class="meta">{tags}'
                 f'{star}<span class="src">{_esc(e.get("location") or e["source"])}</span></div></div></div>')
         openattr = " open" if i < 2 else ""
         sections.append(
