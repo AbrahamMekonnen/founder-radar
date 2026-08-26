@@ -108,6 +108,57 @@ def parse_ical_dt(val):
         return None
 
 
+def iso_time(s):
+    """Extract a display time (Pacific) from an ISO datetime, e.g. '6:00PM'.
+    Returns '' for date-only inputs (which parse to midnight)."""
+    try:
+        d = dt.datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+    except Exception:
+        return ""
+    if d.tzinfo and _PT:
+        d = d.astimezone(_PT)
+    if d.hour == 0 and d.minute == 0:
+        return ""  # almost always a date-only value, not a real midnight event
+    return f"{(d.hour % 12) or 12}:{d.minute:02d}{'AM' if d.hour < 12 else 'PM'}"
+
+
+def iso_when(s):
+    """Build a WHEN string 'YYYY-MM-DD 6:00PM' (time omitted if none)."""
+    d = parse_iso(s)
+    t = iso_time(s)
+    if not d:
+        return t
+    return f"{d.isoformat()} {t}".strip()
+
+
+def ical_when(val):
+    """WHEN string from an iCal DTSTART value, preserving time when present."""
+    m = re.search(r"(\d{8})T(\d{6})(Z)?", val or "")
+    if not m:
+        d = parse_ical_dt(val or "")
+        return d.isoformat() if d else ""
+    ymd, hms = m.group(1), m.group(2)
+    iso = (f"{ymd[:4]}-{ymd[4:6]}-{ymd[6:8]}T{hms[:2]}:{hms[2:4]}:{hms[4:6]}"
+           + ("+00:00" if m.group(3) else ""))  # Z = UTC -> convert; else treat local
+    return iso_when(iso)
+
+
+def fmt_time(when):
+    """Pull a clean time label out of any WHEN string; '—' if none found."""
+    s = when or ""
+    m = re.search(r"(\d{1,2}):(\d{2})\s*([APap])\.?\s*[Mm]", s)   # 6:00 PM / 6:00pm
+    if m:
+        return f"{int(m.group(1))}:{m.group(2)}{m.group(3).upper()}M"
+    m = re.search(r"\b(\d{1,2})\s*([APap])\.?\s*[Mm]\b", s)       # 6 PM
+    if m:
+        return f"{int(m.group(1))}:00{m.group(2).upper()}M"
+    m = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)\b", s)           # 18:00 (24-hour)
+    if m:
+        h = int(m.group(1))
+        return f"{(h % 12) or 12}:{m.group(2)}{'AM' if h < 12 else 'PM'}"
+    return "—"
+
+
 def parse_monthday(text):
     """Parse 'Aug 26' / 'August 26, 2026' style; infer year if absent."""
     m = re.search(r"([A-Z][a-z]{2,8})\s+(\d{1,2})(?:.*?(\d{4}))?", text)
@@ -172,7 +223,8 @@ def fetch_luma_discovery(url):
                     found.append(_norm_event(
                         "luma", ev.get("name"), parse_iso(ev.get("start_at")),
                         ev.get("geo_address_info", {}).get("city_state", "") if isinstance(ev.get("geo_address_info"), dict) else "",
-                        f"https://luma.com/{slug}" if slug and not slug.startswith("http") else slug))
+                        f"https://luma.com/{slug}" if slug and not slug.startswith("http") else slug,
+                        when=iso_when(ev.get("start_at"))))
             for v in o.values():
                 walk(v)
         elif isinstance(o, list):
@@ -195,7 +247,8 @@ def fetch_luma_calendar(cal_id):
         out.append(_norm_event(
             "luma-cal", ev.get("name"), parse_iso(ev.get("start_at")),
             ev.get("timezone", ""),
-            f"https://luma.com/{slug}" if slug and not slug.startswith("http") else slug))
+            f"https://luma.com/{slug}" if slug and not slug.startswith("http") else slug,
+            when=iso_when(ev.get("start_at"))))
     return out
 
 
@@ -224,7 +277,8 @@ def fetch_jsonld(url):
         loc = e.get("location")
         loc = loc.get("name") if isinstance(loc, dict) else (loc or "")
         out.append(_norm_event(host, e.get("name"), parse_iso(e.get("startDate")),
-                               loc, e.get("url", ""), e.get("description", "")))
+                               loc, e.get("url", ""), e.get("description", ""),
+                               when=iso_when(e.get("startDate"))))
     return out
 
 
@@ -249,7 +303,8 @@ def fetch_ical(url):
             host, (s.group(1).strip() if s else ""),
             parse_ical_dt(d.group(1)) if d else None,
             (loc.group(1).strip() if loc else "").replace("\\,", ","),
-            (u.group(1).strip() if u else "")))
+            (u.group(1).strip() if u else ""),
+            when=ical_when(d.group(1) if d else "")))
     return out
 
 
@@ -617,21 +672,31 @@ BOARD_JS = """<script>
  document.getElementById('theme').onclick=function(){
    var d=(root.getAttribute('data-theme')==='dark')?'light':'dark';
    root.setAttribute('data-theme',d);localStorage.setItem('fr-theme',d);};
- var cat='all',major=false;
+ var sel={},major=false;   // sel = set of active categories; empty = show all
+ function keys(){return Object.keys(sel);}
  function apply(){
+   var ks=keys();
    document.querySelectorAll('.ev').forEach(function(e){
      var tags=(e.dataset.cat||'').split(' ');
-     var ok=(cat==='all'||tags.indexOf(cat)>=0)&&(!major||e.dataset.caliber==='major');
+     var catok=ks.length===0||ks.some(function(k){return tags.indexOf(k)>=0;});
+     var ok=catok&&(!major||e.dataset.caliber==='major');
      e.style.display=ok?'':'none';});
    document.querySelectorAll('details').forEach(function(d){
      var vis=d.querySelectorAll('.ev:not([style*="none"])').length;
      d.style.display=vis?'':'none';
      var c=d.querySelector('.daycount'); if(c)c.textContent=vis+(vis===1?' event':' events');});
  }
+ function syncChips(){
+   document.querySelectorAll('.chip[data-cat]').forEach(function(x){
+     var c=x.dataset.cat;
+     x.setAttribute('aria-pressed', c==='all'?keys().length===0:!!sel[c]);});
+ }
  document.querySelectorAll('.chip[data-cat]').forEach(function(b){
-   b.onclick=function(){cat=b.dataset.cat;
-     document.querySelectorAll('.chip[data-cat]').forEach(function(x){x.setAttribute('aria-pressed',x===b);});
-     apply();};});
+   b.onclick=function(){
+     var c=b.dataset.cat;
+     if(c==='all'){sel={};}
+     else if(sel[c]){delete sel[c];} else {sel[c]=1;}
+     syncChips();apply();};});
  var mj=document.getElementById('majorToggle');
  mj.onclick=function(){major=!major;mj.setAttribute('aria-pressed',major);apply();};
  // tap a card to reveal its description (ignore taps on the signup link)
@@ -661,8 +726,7 @@ def build_board_inner(events, generated, new_ids=None):
         for e in items:
             cats = norm_cats(e.get("categories") or e.get("category"))
             cats = [c for c in cats if c in CAT] or ["other"]
-            tm = re.search(r"(\d{1,2}:\d{2}\s*[APap][Mm])", e.get("when", ""))
-            time = tm.group(1).upper().replace(" ", "") if tm else "—"
+            time = fmt_time(e.get("when", ""))
             star = ' <span class="star" title="major">★</span>' if e.get("caliber") == "major" else ""
             newb = ' <span class="new">new</span>' if event_id(e) in new_ids else ""
             url = _esc(e.get("url") or "#")
@@ -687,8 +751,8 @@ def build_board_inner(events, generated, new_ids=None):
             '<div class="wrap"><header>'
             '<h1 class="title"><span class="dot"></span>Founder Radar'
             '<button id="theme" class="themebtn" title="Toggle theme">◐</button></h1>'
-            f'<p class="sub">SF founder · VC · hiring events, {WINDOW_LABEL} · '
-            f'updated {generated}</p>'
+            f'<p class="sub">Bay Area founder · VC · hiring events, {WINDOW_LABEL} · '
+            f'updated {generated} · tap multiple filters to combine</p>'
             '<div class="filters">'
             '<button class="chip" data-cat="all" aria-pressed="true">All</button>'
             '<button class="chip" data-cat="founder">Founders</button>'
