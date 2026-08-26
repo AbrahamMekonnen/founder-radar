@@ -23,8 +23,10 @@ from pathlib import Path
 # ---------------- config ------------------------------------------------------
 SEEN_FILE     = Path(__file__).parent / "seen.json"
 GEMINI_MODEL  = os.environ.get("GEMINI_MODEL") or "gemini-3.6-flash"
-LEAD_DAYS     = int(os.environ.get("LEAD_DAYS") or "5")    # skip events sooner than this (need travel/planning lead time)
+LEAD_DAYS     = int(os.environ.get("LEAD_DAYS") or "0")    # 0 = include today; raise to require planning lead time
 HORIZON_DAYS  = int(os.environ.get("HORIZON_DAYS") or "18")  # far edge of the window
+WINDOW_LABEL  = (f"today to +{HORIZON_DAYS} days" if LEAD_DAYS <= 0
+                 else f"+{LEAD_DAYS} to +{HORIZON_DAYS} days out")
 DRY_RUN       = os.environ.get("DRY_RUN", "").lower() in ("1", "true", "yes")
 UA            = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36")
@@ -568,7 +570,7 @@ def build_board_inner(events, generated, new_ids=None):
             '<div class="wrap"><header>'
             '<h1 class="title"><span class="dot"></span>Founder Radar'
             '<button id="theme" class="themebtn" title="Toggle theme">◐</button></h1>'
-            f'<p class="sub">SF founder · VC · hiring events, {LEAD_DAYS}–{HORIZON_DAYS} days out · '
+            f'<p class="sub">SF founder · VC · hiring events, {WINDOW_LABEL} · '
             f'updated {generated}</p>'
             '<div class="filters">'
             '<button class="chip" data-cat="all" aria-pressed="true">All</button>'
