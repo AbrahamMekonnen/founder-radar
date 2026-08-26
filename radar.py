@@ -51,6 +51,11 @@ KEEP an event only if it is clearly one of:
   - events hosted by VCs or where funded founders/investors clearly gather
   - hiring / recruiting / talent events, or company-hosted nights (host is hiring)
   - major-caliber summits/conferences relevant to founders/VCs/hiring
+LOCATION: the event MUST be in-person in the San Francisco Bay Area
+  (San Francisco, Peninsula, South Bay/Silicon Valley, or East Bay -- e.g. SF,
+  Oakland, Berkeley, Palo Alto, Mountain View, Menlo Park, Sunnyvale, San Jose,
+  Santa Clara, Cupertino, Redwood City, San Mateo). Set keep=false for any event
+  in another city/country or that is online/virtual/remote.
 DROP: pure hackathons unless investor-facing, generic coding workshops, trainings,
   product webinars, wellness/social-only meetups, and anything not about
   founders/VCs/hiring.
@@ -366,6 +371,33 @@ def within_horizon(e):
         return False  # need a date to place it in the window
     today = dt.date.today()
     return (today + dt.timedelta(days=LEAD_DAYS)) <= e["start"] <= (today + dt.timedelta(days=HORIZON_DAYS))
+
+
+# ---------------- geo filter: Bay Area, in-person only -----------------------
+# explicit non-Bay places -> drop (a source occasionally lists other cities)
+NON_BAY = [
+    "london", "new york", "nyc", "brooklyn", "manhattan", "austin", "seattle",
+    "boston", "chicago", "denver", "miami", "los angeles", "san diego",
+    "portland", "toronto", "vancouver", "montreal", "mexico city", "singapore",
+    "bangalore", "bengaluru", "mumbai", "new delhi", "hyderabad", "tokyo",
+    "berlin", "munich", "paris", "amsterdam", "dublin", "lisbon", "madrid",
+    "tel aviv", "dubai", "sydney", "melbourne", "hong kong", "shanghai",
+    "beijing", "shenzhen", "seoul", "atlanta", "washington, d", "philadelphia",
+    "phoenix", "dallas", "houston", "nashville", "sacramento", "las vegas",
+]
+# location field that is online/remote -> drop (we want in-person only)
+ONLINE_LOC = ["online", "virtual", "remote", "livestream", "webinar", "zoom",
+              "google meet", "gather.town", "hopin"]
+
+
+def in_bay_area(e):
+    loc = (e.get("location") or "").lower()
+    hay = loc + " | " + (e.get("title") or "").lower()
+    if any(tok in hay for tok in NON_BAY):
+        return False
+    if any(tok in loc for tok in ONLINE_LOC):
+        return False
+    return True  # venue-only or Bay-named -> keep; AI does final geo/relevance
 
 
 # ---------------- classify (free AI: Gemini) ---------------------------------
@@ -694,11 +726,16 @@ def main():
 
     raw = gather_all()
     by_id = {}
+    non_bay = 0
     for e in raw:
-        if within_horizon(e):
-            by_id[event_id(e)] = e
+        if not within_horizon(e):
+            continue
+        if not in_bay_area(e):
+            non_bay += 1
+            continue
+        by_id[event_id(e)] = e
     print(f"[info] {len(raw)} scraped -> {len(by_id)} in window "
-          f"[+{LEAD_DAYS}d .. +{HORIZON_DAYS}d]")
+          f"[+{LEAD_DAYS}d .. +{HORIZON_DAYS}d] ({non_bay} dropped: not Bay Area)")
 
     new_ids = {eid for eid in by_id if eid not in seen}
     print(f"[info] {len(new_ids)} new since last run")
