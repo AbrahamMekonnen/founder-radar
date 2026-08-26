@@ -120,11 +120,27 @@ def parse_monthday(text):
     return d
 
 
+def _norm_title(s):
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def clean_url(u):
+    """Drop utm_* tracking params so links are canonical."""
+    try:
+        parts = urllib.parse.urlsplit(u)
+        q = [(k, v) for k, v in urllib.parse.parse_qsl(parts.query)
+             if not k.lower().startswith("utm_")]
+        return urllib.parse.urlunsplit(
+            (parts.scheme, parts.netloc, parts.path, urllib.parse.urlencode(q), ""))
+    except Exception:
+        return u
+
+
 # ---------------- adapters (each returns list of normalized dicts) ------------
 def _norm_event(source, title, start, location="", url="", blurb="", when=""):
     return {"source": source, "title": (title or "").strip(),
             "start": start, "when": when or (start.isoformat() if start else ""),
-            "location": (location or "").strip(), "url": url or "",
+            "location": (location or "").strip(), "url": clean_url(url) if url else "",
             "blurb": (blurb or "").strip()[:MAX_BLURB]}
 
 
@@ -206,6 +222,14 @@ def fetch_jsonld(url):
 
 def fetch_ical(url):
     ics = http_get(url)
+    # iCal folds long lines (CRLF + space/tab) - unfold or URLs truncate
+    out_lines = []
+    for ln in ics.splitlines():
+        if ln[:1] in (" ", "\t") and out_lines:
+            out_lines[-1] += ln[1:]
+        else:
+            out_lines.append(ln)
+    ics = "\n".join(out_lines)
     out = []
     for v in re.findall(r"BEGIN:VEVENT(.*?)END:VEVENT", ics, re.S):
         s = re.search(r"\nSUMMARY[^:]*:(.*)", v)
@@ -250,8 +274,18 @@ def fetch_cerebralvalley():
             text = page.inner_text("main")
         except Exception:
             text = page.inner_text("body")
+        # each event title is an <a> pointing at its real signup page
+        links = page.evaluate("""() => [...document.querySelectorAll('a[href]')]
+            .map(a => ({href: a.href, text: (a.innerText || '').trim()}))
+            .filter(x => x.text && /^https?:/.test(x.href))""")
         browser.close()
-    return parse_cv_text(text)
+    link_map = {}
+    for l in links:
+        k = _norm_title(l.get("text"))
+        if k and k not in link_map:
+            link_map[k] = l.get("href")
+    print(f"[info] cerebralvalley: {len(link_map)} per-event links")
+    return parse_cv_text(text, link_map)
 
 
 CV_BADGES = {"LIVE", "Today", "Tomorrow", "This Week", "Next Week", "Featured",
@@ -259,7 +293,7 @@ CV_BADGES = {"LIVE", "Today", "Tomorrow", "This Week", "Next Week", "Featured",
 CV_DATE_RE = re.compile(r"^(Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+[A-Za-z]+\s+\d{1,2}\s+·")
 
 
-def parse_cv_text(text):
+def parse_cv_text(text, link_map=None):
     lines = [l.strip() for l in text.split("\n")]
     lines = [l for l in lines if l]
     out, n = [], len(lines)
@@ -293,8 +327,9 @@ def parse_cv_text(text):
                 break
             k += 1
         b = re.sub(r"\s*see (more|less)\s*$", "", " ".join(blurb)).strip()
+        url = (link_map or {}).get(_norm_title(title)) or CV_URL
         out.append(_norm_event("cerebralvalley", title, parse_monthday(line),
-                               location, CV_URL, b, when=line))
+                               location, url, b, when=line))
     return out
 
 
